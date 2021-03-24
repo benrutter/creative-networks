@@ -1,6 +1,6 @@
 from tensorflow import keras
 from tensorflow.keras import layers
-from tensorflow.keras.optimizers import Adam, RMSprop
+from tensorflow.keras import optimizers
 
 
 def build_generator(
@@ -70,7 +70,7 @@ def build_discriminator(
 
     model.compile(
         loss='binary_crossentropy',
-        optimizer=RMSprop(0.0002, 0.005),
+        optimizer=optimizers.RMSprop(0.0002, 0.005),
         metrics=['accuracy']
     )
 
