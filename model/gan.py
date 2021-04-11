@@ -3,6 +3,7 @@
 # Antonio Gulli, Amita Kapoor, Suji Pal
 
 import numpy as np
+import pickle
 from tensorflow.keras.datasets import mnist
 from tensorflow import keras
 from tensorflow.keras import layers, optimizers, initializers
@@ -22,29 +23,30 @@ class ArtHeistGAN():
         self.channels = channels
         self.img_shape = (self.img_rows, self.img_cols, self.channels)
         self.latent_dim = z
+        self.total_epoch = 0
 
-        optimizer = optimizers.Adam(0.0002, 0.5)
+        adam = optimizers.Adam(0.0002, 0.5)
 
         # Build and compile the discriminator
         self.discriminator = self._build_discriminator()
         self.discriminator.compile(
             loss='binary_crossentropy',
-            optimizer=optimizer,
+            optimizer=adam,
             metrics=['accuracy'],
         )
 
         # Build the generator
         self.generator = self._build_generator()
 
-        # The generator takes noise as input and generates imgs
-        z = Input(shape=(self.latent_dim,))
-        img = self.generator(z)
+        # The generator takes noise as input and generates images
+        z = layers.Input(shape=(self.latent_dim,))
+        image = self.generator(z)
 
         # For the combined model we will only train the generator
         self.discriminator.trainable = False
 
         # The discriminator takes generated images as input and determines validity
-        valid = self.discriminator(img)
+        valid = self.discriminator(image)
 
         # The combined model  (stacked generator and discriminator)
         # Trains the generator to fool the discriminator
@@ -74,7 +76,7 @@ class ArtHeistGAN():
         noise = layers.Input(shape=(self.latent_dim,))
         image = generator(noise)
 
-        return Model(noise, image)
+        return keras.Model(noise, image)
 
     def _build_discriminator(self):
         """
@@ -82,7 +84,7 @@ class ArtHeistGAN():
         (void fucntion, takes no arguments)
         """
 
-        discriminator = Sequential()
+        discriminator = keras.Sequential()
 
         discriminator.add(layers.Conv2D(32, kernel_size=3, strides=2, input_shape=self.img_shape, padding="same"))
         discriminator.add(layers.LeakyReLU(alpha=0.2))
@@ -103,19 +105,12 @@ class ArtHeistGAN():
         discriminator.add(layers.Flatten())
         discriminator.add(layers.Dense(1, activation='sigmoid'))
 
-        image = Input(shape=self.img_shape)
+        image = layers.Input(shape=self.img_shape)
         validity = discriminator(image)
 
-        return Model(image, validity)
+        return keras.Model(image, validity)
 
-    def train(self, epochs, batch_size=256, save_interval=50):
-
-        # Load the dataset
-        (x_train, _), (_, _) = mnist.load_data()
-
-        # Rescale -1 to 1
-        x_train = x_train / 127.5 - 1.
-        x_train = np.expand_dims(x_train, axis=3)
+    def train(self, epochs=1, batch_size=256, image_save_interval=50):
 
         # Adversarial ground truths
         valid = np.ones((batch_size, 1))
@@ -124,8 +119,8 @@ class ArtHeistGAN():
         for epoch in range(epochs):
 
             # Select a random half of images
-            idx = np.random.randint(0, X_train.shape[0], batch_size)
-            imgs = x_train[idx]
+            idx = np.random.randint(0, self.x_train.shape[0], batch_size)
+            imgs = self.x_train[idx]
 
             # Sample noise and generate a batch of new images
             noise = np.random.normal(0, 1, (batch_size, self.latent_dim))
@@ -139,12 +134,11 @@ class ArtHeistGAN():
             # Train the generator (wants discriminator to mistake images as real)
             g_loss = self.combined.train_on_batch(noise, valid)
 
-            # Plot the progress
-            print ("%d [D loss: %f, acc.: %.2f%%] [G loss: %f]" % (epoch, d_loss[0], 100*d_loss[1], g_loss))
+            self.total_epoch += 1
 
             # If at save interval => save generated image samples
-            if epoch % save_interval == 0:
-                self.save_images(epoch)
+            if epoch % image_save_interval == 0:
+                self.save_images(self.total_epoch)
 
     def save_images(self, epoch):
         r, c = 5, 5
@@ -164,5 +158,24 @@ class ArtHeistGAN():
         fig.savefig("images/dcgan_mnist_%d.png" % epoch)
         plt.close()
 
-    def get_data(self, artist):
-        pass
+    def get_data(self, size, term):
+        """
+        Method to fetch data, for training of model.
+        Longterm plan is to use 'term' argument to:
+            - search for n images
+            - manipulate them into set resolution
+        At the moment, this just sets self.x_train to mnist dataset
+        """
+        (x_train, _), (_, _) = mnist.load_data()
+        # Rescale -1 to 1
+        x_train = x_train / 127.5 - 1.
+        x_train = np.expand_dims(x_train, axis=3)
+
+        self.x_train = xtrain
+
+    def save(self):
+        """
+        Method to save copy of model for retraining later on
+        """
+        with open(f'art_heist_gan_e{self.total_epoch}.obj', w) as output_file:
+            pickle.dump(self, output_file)
