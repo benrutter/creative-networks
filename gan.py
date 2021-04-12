@@ -35,7 +35,7 @@ class ArtDCGAN():
         self.combined = keras.Model(noise_input, valid)
         self.combined.compile(loss='binary_crossentropy', optimizer=adam)
 
-    def load_gan(self, generator_weights, discriminator_weights):
+    def load_gan(self, generator_weights='artifacts/generator_weights', discriminator_weights='artifacts/discriminator_weights'):
         self.build_gan()
         self.generator.load_weights(generator_weights)
         self.discriminator.load_weights(discriminator_weights)
@@ -65,7 +65,7 @@ class ArtDCGAN():
         generator.add(layers.Activation("relu"))
         generator.add(layers.Conv2D(self.channels, kernel_size=3, padding="same"))
         generator.add(layers.Activation("tanh"))
-        generator.summary()
+
         noise = layers.Input(shape=(self.latent_dim,))
         image = generator(noise)
 
@@ -97,7 +97,7 @@ class ArtDCGAN():
         discriminator.add(layers.Dropout(0.25))
         discriminator.add(layers.Flatten())
         discriminator.add(layers.Dense(1, activation='sigmoid'))
-        discriminator.summary()
+
         image = layers.Input(shape=self.img_shape)
         validity = discriminator(image)
 
@@ -134,8 +134,8 @@ class ArtDCGAN():
                 self.save_images(self.total_epoch)
 
             if epoch % model_save_interval == 0:
-                self.discriminator.save_weights('discriminator-weights.tf')
-                self.generator.save_weights('discriminator-weights.tf')
+                self.discriminator.save_weights('artifacts/discriminator-weights')
+                self.generator.save_weights('artifacts/generator-weights')
 
     def save_images(self, epoch):
         """
@@ -147,16 +147,16 @@ class ArtDCGAN():
         generated_images = self.generator.predict(noise)
 
         # Rescale images 0 - 1
-        generated_images = 0.5 * gen_imgs + 0.5
+        generated_images = 0.5 * generated_images + 0.5
 
         fig, axs = plt.subplots(r, c)
         cnt = 0
         for i in range(r):
             for j in range(c):
-                axs[i,j].imshow(gen_imgs[cnt, :,:,0], cmap='gray')
+                axs[i,j].imshow(generated_images[cnt, :,:,0], cmap='gray')
                 axs[i,j].axis('off')
                 cnt += 1
-        fig.savefig("images/dcgan_mnist_%d.png" % epoch)
+        fig.savefig("output_images/dcgan_mnist_%d.png" % epoch)
         plt.close()
 
     def _get_data(self, term, size=100):
@@ -172,8 +172,14 @@ class ArtDCGAN():
         x_train = x_train / 127.5 - 1.
         x_train = np.expand_dims(x_train, axis=3)
 
-        self.x_train = xtrain
+        self.x_train = x_train
 
     def train_on(self, term, epochs, size=100, batch_size=256, model_save_interval=100, image_save_interval=50):
         self._get_data(term, size)
         self._train(epochs, batch_size, model_save_interval, image_save_interval)
+
+test_gan = ArtDCGAN()
+test_gan.build_gan()
+test_gan.train_on('cubism', 1)
+test_gan.load_gan()
+test_gan.train_on('picasso', 1)
