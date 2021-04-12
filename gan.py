@@ -1,15 +1,9 @@
-# built in part from example code in:
-# Deep Learning with Tensorflow 2 and Keras
-# Antonio Gulli, Amita Kapoor, Suji Pal
-
 import numpy as np
-import pickle
-from tensorflow.keras.datasets import mnist
 from tensorflow import keras
 from tensorflow.keras import layers, optimizers, initializers
 import matplotlib.pyplot as plt
 
-class ArtHeistGAN():
+class ArtDCGAN():
     """
     DCGAN class designed to be train, saved and retrained on art data.
     Contains methods on:
@@ -17,41 +11,40 @@ class ArtHeistGAN():
         - Fetching and processing images
     (At this point, almost everything is TODO)
     """
-    def __init__(self, rows, cols, channels, z=10):
-        self.img_rows = rows
-        self.img_cols = cols
-        self.channels = channels
+    def __init__(self):
+        self.img_rows = 28
+        self.img_cols = 28
+        self.channels = 1
         self.img_shape = (self.img_rows, self.img_cols, self.channels)
-        self.latent_dim = z
+        self.latent_dim = 100
         self.total_epoch = 0
 
+    def build_gan(self):
         adam = optimizers.Adam(0.0002, 0.5)
-
-        # Build and compile the discriminator
         self.discriminator = self._build_discriminator()
         self.discriminator.compile(
             loss='binary_crossentropy',
             optimizer=adam,
             metrics=['accuracy'],
         )
-
-        # Build the generator
         self.generator = self._build_generator()
-
-        # The generator takes noise as input and generates images
-        z = layers.Input(shape=(self.latent_dim,))
-        image = self.generator(z)
-
-        # For the combined model we will only train the generator
+        noise_input = layers.Input(shape=(self.latent_dim,))
+        image = self.generator(noise_input)
         self.discriminator.trainable = False
-
-        # The discriminator takes generated images as input and determines validity
         valid = self.discriminator(image)
+        self.combined = keras.Model(noise_input, valid)
+        self.combined.compile(loss='binary_crossentropy', optimizer=adam)
 
-        # The combined model  (stacked generator and discriminator)
-        # Trains the generator to fool the discriminator
-        self.combined = Model(z, valid)
-        self.combined.compile(loss='binary_crossentropy', optimizer=optimizer)
+    def load_gan(self, generator_weights, discriminator_weights):
+        self.build_gan()
+        self.generator.load_weights(generator_weights)
+        self.discriminator.load_weights(discriminator_weights)
+        noise_input = layers.Input(shape=(self.latent_dim,))
+        image = self.generator(noise_input)
+        valid = self.discriminator(image)
+        self.combined = keras.Model(noise_input, valid)
+        adam = optimizers.Adam(0.0002, 0.5)
+        self.combined.compile(loss='binary_crossentropy', optimizer=adam)
 
     def _build_generator(self):
         """
@@ -72,7 +65,7 @@ class ArtHeistGAN():
         generator.add(layers.Activation("relu"))
         generator.add(layers.Conv2D(self.channels, kernel_size=3, padding="same"))
         generator.add(layers.Activation("tanh"))
-
+        generator.summary()
         noise = layers.Input(shape=(self.latent_dim,))
         image = generator(noise)
 
@@ -104,13 +97,13 @@ class ArtHeistGAN():
         discriminator.add(layers.Dropout(0.25))
         discriminator.add(layers.Flatten())
         discriminator.add(layers.Dense(1, activation='sigmoid'))
-
+        discriminator.summary()
         image = layers.Input(shape=self.img_shape)
         validity = discriminator(image)
 
         return keras.Model(image, validity)
 
-    def train(self, epochs=1, batch_size=256, image_save_interval=50):
+    def _train(self, epochs=1, batch_size=256, model_save_interval=100, image_save_interval=50):
 
         # Adversarial ground truths
         valid = np.ones((batch_size, 1))
@@ -140,7 +133,15 @@ class ArtHeistGAN():
             if epoch % image_save_interval == 0:
                 self.save_images(self.total_epoch)
 
+            if epoch % model_save_interval == 0:
+                self.discriminator.save_weights('discriminator-weights.tf')
+                self.generator.save_weights('discriminator-weights.tf')
+
     def save_images(self, epoch):
+        """
+        currently using matplotlib to save images for a set epoch
+        TODO: switch over for PIL to save directly as single images, rather than plots
+        """
         r, c = 5, 5
         noise = np.random.normal(0, 1, (r * c, self.latent_dim))
         generated_images = self.generator.predict(noise)
@@ -158,7 +159,7 @@ class ArtHeistGAN():
         fig.savefig("images/dcgan_mnist_%d.png" % epoch)
         plt.close()
 
-    def get_data(self, size, term):
+    def _get_data(self, term, size=100):
         """
         Method to fetch data, for training of model.
         Longterm plan is to use 'term' argument to:
@@ -166,16 +167,13 @@ class ArtHeistGAN():
             - manipulate them into set resolution
         At the moment, this just sets self.x_train to mnist dataset
         """
-        (x_train, _), (_, _) = mnist.load_data()
+        (x_train, _), (_, _) = keras.datasets.mnist.load_data()
         # Rescale -1 to 1
         x_train = x_train / 127.5 - 1.
         x_train = np.expand_dims(x_train, axis=3)
 
         self.x_train = xtrain
 
-    def save(self):
-        """
-        Method to save copy of model for retraining later on
-        """
-        with open(f'art_heist_gan_e{self.total_epoch}.obj', w) as output_file:
-            pickle.dump(self, output_file)
+    def train_on(self, term, epochs, size=100, batch_size=256, model_save_interval=100, image_save_interval=50):
+        self._get_data(term, size)
+        self._train(epochs, batch_size, model_save_interval, image_save_interval)
