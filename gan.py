@@ -4,29 +4,28 @@ from tensorflow.keras import layers, optimizers
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from PIL import Image
 
-
-class ArtDCGAN():
+class ArtDCGAN(keras.Model):
     """
     DCGAN class designed to be train, saved and retrained on image data.
     Initialisation takes:
         size (int): translates to size of generated images
     """
-    def __init__(self, size=5):
+    def __init__(self, size=5, latent_dim=128, batch_size=32, train_directory='train_image'):
+        super(ARTDCGAN, self).__init__()
         self.size_factor = size
         self.image_width = self.size_factor * 32
         self.image_height = self.size_factor * 32
         self.channels = 3
         self.image_shape = (self.image_height, self.image_width, self.channels)
-        self.latent_dim = 128
-        self._get_data()
+        self.latent_dim = latent_dim
+        self.batch_size = batch_size
+        self._get_data(train_directory)
 
     def build_gan(self):
-        adam = optimizers.Adam(0.0002, 0.5)
         self.discriminator = self._build_discriminator()
         self.discriminator.compile(
-            loss='binary_crossentropy',
-            optimizer=adam,
-            metrics=['accuracy'],
+            loss="binary_crossentropy",
+            optimizer=optimizers.Adam(0.0001),
         )
         self.generator = self._build_generator()
         noise_input = layers.Input(shape=(self.latent_dim,))
@@ -34,20 +33,22 @@ class ArtDCGAN():
         self.discriminator.trainable = False
         valid = self.discriminator(image)
         self.combined = keras.Model(noise_input, valid)
-        self.combined.compile(loss='binary_crossentropy', optimizer=adam)
+        self.combined.compile(
+            loss="binary_crossentropy",
+            optimizer=optimizers.Adam(0.0001),
+        )
 
     def load_gan(self):
-        self.generator = keras.models.load_model('artifacts/generator')
-        self.discriminator = keras.models.load_model('artifacts/discriminator')
+        self.generator = keras.models.load_model("artifacts/generator")
+        self.discriminator = keras.models.load_model("artifacts/discriminator")
         noise_input = layers.Input(shape=(self.latent_dim,))
         image = self.generator(noise_input)
+        self.discriminator.trainable = False
         valid = self.discriminator(image)
         self.combined = keras.Model(noise_input, valid)
-        adam = optimizers.Adam(0.0002, 0.5)
         self.combined.compile(
-            loss='binary_crossentropy',
-            optimizer=adam,
-            metrics=['accuracy'],
+            loss="binary_crossentropy",
+            optimizer=optimizers.Adam(0.0001),
         )
 
     def _build_generator(self):
@@ -57,46 +58,36 @@ class ArtDCGAN():
         """
         generator = keras.Sequential()
 
-        generator.add(layers.Dense(
-            256*(self.size_factor*self.size_factor),
-            input_dim=self.latent_dim,
-            activation='relu',
-        ))
-        generator.add(layers.Reshape((
-            int(self.size_factor),
-            int(self.size_factor),
-            256
-        )))
+        generator.add(keras.Input(shape=(latent_dim,)))
+        size_for_dense = 128*(self.size_factor*self.size_factor*8*8)
+        generator.add(layers.Dense(size_for_dense))
+        generator.add(layers.Reshape((int(self.size_factor*8), int(self.size_factor*8), 128)))
 
         generator.add(layers.UpSampling2D())
-        generator.add(layers.Conv2D(256, kernel_size=4, padding="same"))
-        generator.add(layers.Dropout(0.5))
+        generator.add(layers.Conv2D(128, kernel_size=5, strides=2, padding="same"))
         generator.add(layers.BatchNormalization(momentum=0.8))
-        generator.add(layers.LeakyReLU())
+        generator.add(layers.LeakyReLU(alpha=0.2))
 
         generator.add(layers.UpSampling2D())
-        generator.add(layers.Conv2D(256, kernel_size=4, padding="same"))
-        generator.add(layers.Dropout(0.5))
+        generator.add(layers.Conv2D(256, kernel_size=5, strides=2, padding="same"))
         generator.add(layers.BatchNormalization(momentum=0.8))
-        generator.add(layers.LeakyReLU())
+        generator.add(layers.LeakyReLU(alpha=0.2))
 
-        for i in range(3):
-            generator.add(layers.UpSampling2D())
-            generator.add(layers.Conv2D(256, kernel_size=4, padding="same"))
-            generator.add(layers.Dropout(0.2))
-            generator.add(layers.BatchNormalization(momentum=0.8))
-            generator.add(layers.Activation("relu"))
+        generator.add(layers.UpSampling2D())
+        generator.add(layers.Conv2D(512, kernel_size=5, strides=2, padding="same"))
+        generator.add(layers.BatchNormalization(momentum=0.8))
+        generator.add(layers.LeakyReLU(alpha=0.2))
 
-        generator.add(layers.Conv2D(self.channels, kernel_size=4, padding="same"))
-        generator.add(layers.Activation("sigmoid"))
+        generator.add(layers.Conv2D(self.channels, kernel_size=5, padding="same"))
+        generator.add(layers.Activation("tanh"))
 
-        print('Generator')
+        print("\nGenerator")
         generator.summary()
 
-        noise = layers.Input(shape=(self.latent_dim,))
-        image = generator(noise)
+        input = layers.Input(shape=(self.latent_dim,))
+        image = generator(input)
 
-        return keras.Model(noise, image)
+        return keras.Model(input, image)
 
     def _build_discriminator(self):
         """
@@ -105,109 +96,100 @@ class ArtDCGAN():
         """
         discriminator = keras.Sequential()
 
-        discriminator.add(layers.Conv2D(
-            32,
-            kernel_size=3,
-            strides=2,
-            input_shape=self.image_shape,
-            padding="same",
-        ))
-        discriminator.add(layers.LeakyReLU(alpha=0.2))
-        discriminator.add(layers.Dropout(0.5))
-
-        discriminator.add(layers.Conv2D(64, kernel_size=4, strides=2, padding="same"))
-        discriminator.add(layers.ZeroPadding2D(padding=((0, 1), (0, 1))))
-        discriminator.add(layers.BatchNormalization(momentum=0.8))
-        discriminator.add(layers.LeakyReLU(alpha=0.2))
-        discriminator.add(layers.Dropout(0.3))
-
-        discriminator.add(layers.Conv2D(128, kernel_size=4, strides=2, padding="same"))
-        discriminator.add(layers.BatchNormalization(momentum=0.8))
-        discriminator.add(layers.LeakyReLU(alpha=0.2))
-        discriminator.add(layers.Dropout(0.3))
-
-        discriminator.add(layers.Conv2D(256, kernel_size=4, strides=1, padding="same"))
-        discriminator.add(layers.BatchNormalization(momentum=0.8))
+        discriminator.add(keras.Input(shape=self.image_shape))
+        discriminator.add(layers.Conv2D(64, kernel_size=5, strides=2, padding="same"))
         discriminator.add(layers.LeakyReLU(alpha=0.2))
         discriminator.add(layers.Dropout(0.2))
 
-        discriminator.add(layers.Conv2D(512, kernel_size=4, strides=1, padding="same"))
+        discriminator.add(layers.Conv2D(128, kernel_size=5, strides=2, padding="same"))
         discriminator.add(layers.BatchNormalization(momentum=0.8))
         discriminator.add(layers.LeakyReLU(alpha=0.2))
-        discriminator.add(layers.Dropout(0.2))
 
-        discriminator.add(layers.Conv2D(1024, kernel_size=4, strides=1, padding="same"))
+        discriminator.add(layers.Conv2D(128, kernel_size=5, strides=2, padding="same"))
         discriminator.add(layers.BatchNormalization(momentum=0.8))
         discriminator.add(layers.LeakyReLU(alpha=0.2))
-        discriminator.add(layers.Dropout(0.2))
 
         discriminator.add(layers.Flatten())
-        discriminator.add(layers.Dense(1, activation='sigmoid'))
+        discriminator.add(layers.Dropout(0.2))
+        discriminator.add(layers.Dense(1, activation="sigmoid"))
 
         image = layers.Input(shape=self.image_shape)
         validity = discriminator(image)
 
-        print('discriminator')
+        print("discriminator")
         discriminator.summary()
 
         return keras.Model(image, validity)
 
-    def train(self, epochs=100, batch_size=32, model_save_interval=100, image_save_interval=50):
+    def train(self, minibatches=100, model_save_interval=100, image_save_interval=1000):
 
-        for epoch in range(epochs):
+        for minibatch in range(minibatches):
 
             # new batch of images
-            noise = np.random.uniform(-1, 1, size=(batch_size, self.latent_dim))
+            noise = np.random.uniform(-1, 1, size=(self.batch_size, self.latent_dim))
             gen_imgs = self.generator.predict(noise)
             train_batch = self.x_train.__next__()
 
+            # changing fraction of labels to prevent one model overpowering the other
+            valid_labels = [[np.random.uniform(0.9, 1)] for i in train_batch[1]]
+            invalid_labels = [[np.random.uniform(0, 0.1)] for i in gen_imgs]
+            valid_labels = np.array(valid_labels)
+            invalid_labels = np.array(invalid_labels)
+
             # discriminator training
-            discriminator_loss_real = self.discriminator.train_on_batch(train_batch[0], train_batch[1])
-            discriminator_loss_fake = self.discriminator.train_on_batch(gen_imgs, np.zeros((batch_size, 1)))
+
+            discriminator_metrics_valid = self.discriminator.train_on_batch(train_batch[0], valid_labels)
+            discriminator_metrics_fake = self.discriminator.train_on_batch(gen_imgs, invalid_labels)
 
             # generator training
-            generator_loss = self.combined.train_on_batch(noise, np.ones((batch_size, 1)))
+            generator_metrics = self.combined.train_on_batch(noise, np.ones((self.batch_size, 1)))
 
             # display progress
-            print(f'Epoch {epoch} - batch size {batch_size}')
-            print(f'Discriminator loss (valid): {sum(discriminator_loss_real)/len(discriminator_loss_real)}')
-            print(f'Discriminator loss (fake): {sum(discriminator_loss_fake)/len(discriminator_loss_fake)}')
-            try:
-                print(f'Generator loss: {sum(generator_loss)/len(generator_loss)}')
-            except:
-                print(f'Generator loss: {generator_loss}')
+            print("\n--------------------------------------------------------")
+            print(f"Minibatch {minibatch} (size {self.batch_size})")
+            average_discriminator_loss = (discriminator_metrics_valid + discriminator_metrics_fake) / 2
+            print(f"Discriminator loss: {average_discriminator_loss}")
+            print(f"Generator loss: {generator_metrics}")
+            print("----------------------------------------------------------")
 
-            if epoch % image_save_interval == 0:
-                self.save_images(epoch)
+            if minibatch % image_save_interval == 0:
+                self.save_images(minibatch)
 
-            if epoch % model_save_interval == 0:
+            if minibatch % model_save_interval == 0:
                 self.save_model()
 
     def save_model(self):
-        self.discriminator.save('artifacts/discriminator')
-        self.generator.save('artifacts/generator')
+        self.discriminator.save("artifacts/discriminator")
+        self.generator.save("artifacts/generator")
 
     def save_images(self, epoch, images=5):
         """
-        Generates and saves images into the 'output_images' folder
+        Generates and saves images into the "output_images" folder
         TODO: switch over for PIL to save directly as single images, rather than plots
         """
-        noise = np.random.normal(0, 1, (images, self.latent_dim))
+        noise = np.random.uniform(-1, 1, size=(images, self.latent_dim))
         generated_images = self.generator.predict(noise)
-        generated_images *= 255
+        generated_images += 1
+        generated_images *= 127.5
         for i in range(images):
-            image = Image.fromarray(generated_images[i, :, :, ].astype(np.uint8))
-            image.convert('RGB').save(f'output_images/art-heist-gan-e{epoch}i{i}.jpg')
+            try:
+                image = Image.fromarray(generated_images[i, :, :, ].astype(np.uint8))
+            except:
+                image = Image.fromarray(np.concatenate(generated_images[i, :, :, ], axis=-1).astype(np.uint8))
+            image.convert("RGB").save(f"output_images/art-heist-gan-e{epoch}i{i}.jpg")
 
-    def _get_data(self, size=100):
+
+    def _get_data(self, directory_name="train_images"):
         """
         Method to fetch data, for training of model.
         """
-        image_generator = ImageDataGenerator(rescale=1.0/255)
+        normalize = lambda x: (x.astype('float32')-127.5)/127.5
+        #image_generator = ImageDataGenerator(rescale=1.0/255)
+        image_generator = ImageDataGenerator(preprocessing_function=normalize)
         image_iterator = image_generator.flow_from_directory(
-            'train_images',
+            directory_name,
             target_size=(self.image_height, self.image_width),
-            batch_size=256,
-            color_mode='rgb',
+            batch_size=self.batch_size,
+            color_mode="rgb",
         )
         self.x_train = image_iterator
