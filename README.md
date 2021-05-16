@@ -42,10 +42,10 @@ However, within epochs/training batches, all produced images are of the same exa
 ![v2 ArtGAN image 2](https://github.com/benrutter/creative-networks/blob/main/readme_images/artgan-v2-2.png)
 ![v2 ArtGAN image 3](https://github.com/benrutter/creative-networks/blob/main/readme_images/artgan-v2-3.png)
 ![v2 ArtGAN image 4](https://github.com/benrutter/creative-networks/blob/main/readme_images/artgan-v2-4.png)
-![v2 ArtGAN image 5](https://github.com/benrutter/creative-networks/blob/main/readme_images/artgan-v2-1.png)
-![v2 ArtGAN image 6](https://github.com/benrutter/creative-networks/blob/main/readme_images/artgan-v2-2.png)
-![v2 ArtGAN image 7](https://github.com/benrutter/creative-networks/blob/main/readme_images/artgan-v2-3.png)
-![v2 ArtGAN image 8](https://github.com/benrutter/creative-networks/blob/main/readme_images/artgan-v2-4.png)
+![v2 ArtGAN image 5](https://github.com/benrutter/creative-networks/blob/main/readme_images/artgan-v2-5.png)
+![v2 ArtGAN image 6](https://github.com/benrutter/creative-networks/blob/main/readme_images/artgan-v2-6.png)
+![v2 ArtGAN image 7](https://github.com/benrutter/creative-networks/blob/main/readme_images/artgan-v2-7.png)
+![v2 ArtGAN image 8](https://github.com/benrutter/creative-networks/blob/main/readme_images/artgan-v2-8.png)
 
 
 ### ArtGAN v3
