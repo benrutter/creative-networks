@@ -1,5 +1,21 @@
-from gan import ArtDCGAN
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+from art_gan import ArtGAN, SaveImages, SaveGANWeights
 
-heist_bot = ArtDCGAN(size=1)
-heist_bot.build_gan()
-heist_bot.train(5000, image_save_interval=50, model_save_interval=100)
+art_gan = ArtGAN()
+art_gan.load()
+art_gan.compile(
+    d_optimizer=keras.optimizers.Adam(learning_rate=0.0001),
+    g_optimizer=keras.optimizers.Adam(learning_rate=0.0001),
+    loss_fn=keras.losses.BinaryCrossentropy(),
+)
+
+art_gan.fit(
+    art_gan.dataset,
+    epochs=1000,
+    callbacks=[
+        SaveImages(3, latent_dimensions=art_gan.latent_dimensions, save_path='output_images/'),
+        SaveGANWeights(art_gan),
+    ],
+)
