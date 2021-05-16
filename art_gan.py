@@ -1,195 +1,135 @@
-import numpy as np
+import tensorflow as tf
 from tensorflow import keras
-from tensorflow.keras import layers, optimizers
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from PIL import Image
+from tensorflow.keras import layers
+import numpy as np
 
-class ArtDCGAN(keras.Model):
-    """
-    DCGAN class designed to be train, saved and retrained on image data.
-    Initialisation takes:
-        size (int): translates to size of generated images
-    """
-    def __init__(self, size=5, latent_dim=128, batch_size=32, train_directory='train_image'):
-        super(ARTDCGAN, self).__init__()
-        self.size_factor = size
-        self.image_width = self.size_factor * 32
-        self.image_height = self.size_factor * 32
-        self.channels = 3
-        self.image_shape = (self.image_height, self.image_width, self.channels)
-        self.latent_dim = latent_dim
-        self.batch_size = batch_size
-        self._get_data(train_directory)
-
-    def build_gan(self):
-        self.discriminator = self._build_discriminator()
-        self.discriminator.compile(
-            loss="binary_crossentropy",
-            optimizer=optimizers.Adam(0.0001),
+class ArtGAN(keras.Model):
+    def __init__(self, latent_dimensions=128, image_directory="train_images"):
+        super(ArtGAN, self).__init__()
+        self.latent_dimensions = latent_dimensions
+        self.generator = self.build_generator()
+        self.discriminator = self.build_discriminator()
+        self.dataset = keras.preprocessing.image_dataset_from_directory(
+            image_directory,
+            label_mode=None,
+            image_size=(64, 64),
+            batch_size=32
         )
-        self.generator = self._build_generator()
-        noise_input = layers.Input(shape=(self.latent_dim,))
-        image = self.generator(noise_input)
-        self.discriminator.trainable = False
-        valid = self.discriminator(image)
-        self.combined = keras.Model(noise_input, valid)
-        self.combined.compile(
-            loss="binary_crossentropy",
-            optimizer=optimizers.Adam(0.0001),
-        )
+        self.dataset = self.dataset.map(lambda x: x / 255.0)
 
-    def load_gan(self):
-        self.generator = keras.models.load_model("artifacts/generator")
-        self.discriminator = keras.models.load_model("artifacts/discriminator")
-        noise_input = layers.Input(shape=(self.latent_dim,))
-        image = self.generator(noise_input)
-        self.discriminator.trainable = False
-        valid = self.discriminator(image)
-        self.combined = keras.Model(noise_input, valid)
-        self.combined.compile(
-            loss="binary_crossentropy",
-            optimizer=optimizers.Adam(0.0001),
-        )
+    def load(self, load_path="artifacts"):
+        self.generator = keras.models.load_model(f"{load_path}/generator")
+        self.discriminator = keras.models.load_model(f"{load_path}/discriminator")
 
-    def _build_generator(self):
-        """
-        Internal method to build generator of GAN
-        (void fucntion, takes no arguments)
-        """
-        generator = keras.Sequential()
-
-        generator.add(keras.Input(shape=(latent_dim,)))
-        size_for_dense = 128*(self.size_factor*self.size_factor*8*8)
-        generator.add(layers.Dense(size_for_dense))
-        generator.add(layers.Reshape((int(self.size_factor*8), int(self.size_factor*8), 128)))
-
-        generator.add(layers.UpSampling2D())
-        generator.add(layers.Conv2D(128, kernel_size=5, strides=2, padding="same"))
-        generator.add(layers.BatchNormalization(momentum=0.8))
-        generator.add(layers.LeakyReLU(alpha=0.2))
-
-        generator.add(layers.UpSampling2D())
-        generator.add(layers.Conv2D(256, kernel_size=5, strides=2, padding="same"))
-        generator.add(layers.BatchNormalization(momentum=0.8))
-        generator.add(layers.LeakyReLU(alpha=0.2))
-
-        generator.add(layers.UpSampling2D())
-        generator.add(layers.Conv2D(512, kernel_size=5, strides=2, padding="same"))
-        generator.add(layers.BatchNormalization(momentum=0.8))
-        generator.add(layers.LeakyReLU(alpha=0.2))
-
-        generator.add(layers.Conv2D(self.channels, kernel_size=5, padding="same"))
-        generator.add(layers.Activation("tanh"))
-
-        print("\nGenerator")
+    def build_generator(self):
+        generator = keras.Sequential([
+            keras.Input(shape=(self.latent_dimensions,)),
+            layers.Dense(8 * 8 * 128),
+            layers.Reshape((8, 8, 128)),
+            layers.Conv2DTranspose(128, kernel_size=4, strides=2, padding="same"),
+            layers.LeakyReLU(alpha=0.2),
+            layers.Conv2DTranspose(256, kernel_size=4, strides=2, padding="same"),
+            layers.LeakyReLU(alpha=0.2),
+            layers.Conv2DTranspose(512, kernel_size=4, strides=2, padding="same"),
+            layers.LeakyReLU(alpha=0.2),
+            layers.Conv2D(3, kernel_size=5, padding="same", activation="sigmoid"),
+        ], name="Generator")
         generator.summary()
+        return generator
 
-        input = layers.Input(shape=(self.latent_dim,))
-        image = generator(input)
-
-        return keras.Model(input, image)
-
-    def _build_discriminator(self):
-        """
-        Internal method to build discriminator of GAN
-        (void function, takes no arguments)
-        """
-        discriminator = keras.Sequential()
-
-        discriminator.add(keras.Input(shape=self.image_shape))
-        discriminator.add(layers.Conv2D(64, kernel_size=5, strides=2, padding="same"))
-        discriminator.add(layers.LeakyReLU(alpha=0.2))
-        discriminator.add(layers.Dropout(0.2))
-
-        discriminator.add(layers.Conv2D(128, kernel_size=5, strides=2, padding="same"))
-        discriminator.add(layers.BatchNormalization(momentum=0.8))
-        discriminator.add(layers.LeakyReLU(alpha=0.2))
-
-        discriminator.add(layers.Conv2D(128, kernel_size=5, strides=2, padding="same"))
-        discriminator.add(layers.BatchNormalization(momentum=0.8))
-        discriminator.add(layers.LeakyReLU(alpha=0.2))
-
-        discriminator.add(layers.Flatten())
-        discriminator.add(layers.Dropout(0.2))
-        discriminator.add(layers.Dense(1, activation="sigmoid"))
-
-        image = layers.Input(shape=self.image_shape)
-        validity = discriminator(image)
-
-        print("discriminator")
+    def build_discriminator(self):
+        discriminator = keras.Sequential([
+            keras.Input(shape=(64, 64, 3)),
+            layers.Conv2D(64, kernel_size=4, strides=2, padding="same"),
+            layers.LeakyReLU(alpha=0.2),
+            layers.Conv2D(128, kernel_size=4, strides=2, padding="same"),
+            layers.LeakyReLU(alpha=0.2),
+            layers.Conv2D(128, kernel_size=4, strides=2, padding="same"),
+            layers.LeakyReLU(alpha=0.2),
+            layers.Flatten(),
+            layers.Dropout(0.2),
+            layers.Dense(1, activation="sigmoid"),
+        ], name="Discriminator")
         discriminator.summary()
+        return discriminator
 
-        return keras.Model(image, validity)
+    def compile(self, d_optimizer, g_optimizer, loss_fn):
+        super(ArtGAN, self).compile()
+        self.d_optimizer = d_optimizer
+        self.g_optimizer = g_optimizer
+        self.loss_fn = loss_fn
+        self.d_loss_metric = keras.metrics.Mean(name="discriminator_loss")
+        self.g_loss_metric = keras.metrics.Mean(name="generator_loss")
 
-    def train(self, minibatches=100, model_save_interval=100, image_save_interval=1000):
+    def load_weights(self, filepath):
+        pass
 
-        for minibatch in range(minibatches):
+    @property
+    def metrics(self):
+        return [self.d_loss_metric, self.g_loss_metric]
 
-            # new batch of images
-            noise = np.random.uniform(-1, 1, size=(self.batch_size, self.latent_dim))
-            gen_imgs = self.generator.predict(noise)
-            train_batch = self.x_train.__next__()
+    def train_step(self, real_images):
+        # random points in latent space into images via generator
+        # used for disciminator training
+        batch_size = tf.shape(real_images)[0]
+        noise_input = tf.random.normal(shape=(batch_size, self.latent_dimensions))
+        generated_images = self.generator(noise_input)
 
-            # changing fraction of labels to prevent one model overpowering the other
-            valid_labels = [[np.random.uniform(0.9, 1)] for i in train_batch[1]]
-            invalid_labels = [[np.random.uniform(0, 0.1)] for i in gen_imgs]
-            valid_labels = np.array(valid_labels)
-            invalid_labels = np.array(invalid_labels)
+        # produce combined training set
+        combined_images = tf.concat([generated_images, real_images], axis=0)
+        labels = tf.concat([tf.ones((batch_size, 1)), tf.zeros((batch_size, 1))], axis=0)
+        labels += 0.1 * tf.random.uniform(tf.shape(labels))
 
-            # discriminator training
-
-            discriminator_metrics_valid = self.discriminator.train_on_batch(train_batch[0], valid_labels)
-            discriminator_metrics_fake = self.discriminator.train_on_batch(gen_imgs, invalid_labels)
-
-            # generator training
-            generator_metrics = self.combined.train_on_batch(noise, np.ones((self.batch_size, 1)))
-
-            # display progress
-            print("\n--------------------------------------------------------")
-            print(f"Minibatch {minibatch} (size {self.batch_size})")
-            average_discriminator_loss = (discriminator_metrics_valid + discriminator_metrics_fake) / 2
-            print(f"Discriminator loss: {average_discriminator_loss}")
-            print(f"Generator loss: {generator_metrics}")
-            print("----------------------------------------------------------")
-
-            if minibatch % image_save_interval == 0:
-                self.save_images(minibatch)
-
-            if minibatch % model_save_interval == 0:
-                self.save_model()
-
-    def save_model(self):
-        self.discriminator.save("artifacts/discriminator")
-        self.generator.save("artifacts/generator")
-
-    def save_images(self, epoch, images=5):
-        """
-        Generates and saves images into the "output_images" folder
-        TODO: switch over for PIL to save directly as single images, rather than plots
-        """
-        noise = np.random.uniform(-1, 1, size=(images, self.latent_dim))
-        generated_images = self.generator.predict(noise)
-        generated_images += 1
-        generated_images *= 127.5
-        for i in range(images):
-            try:
-                image = Image.fromarray(generated_images[i, :, :, ].astype(np.uint8))
-            except:
-                image = Image.fromarray(np.concatenate(generated_images[i, :, :, ], axis=-1).astype(np.uint8))
-            image.convert("RGB").save(f"output_images/art-heist-gan-e{epoch}i{i}.jpg")
-
-
-    def _get_data(self, directory_name="train_images"):
-        """
-        Method to fetch data, for training of model.
-        """
-        normalize = lambda x: (x.astype('float32')-127.5)/127.5
-        #image_generator = ImageDataGenerator(rescale=1.0/255)
-        image_generator = ImageDataGenerator(preprocessing_function=normalize)
-        image_iterator = image_generator.flow_from_directory(
-            directory_name,
-            target_size=(self.image_height, self.image_width),
-            batch_size=self.batch_size,
-            color_mode="rgb",
+        # train discriminator
+        with tf.GradientTape() as tape:
+            predictions = self.discriminator(combined_images)
+            d_loss = self.loss_fn(labels, predictions)
+        grads = tape.gradient(d_loss, self.discriminator.trainable_weights)
+        self.d_optimizer.apply_gradients(
+            zip(grads, self.discriminator.trainable_weights)
         )
-        self.x_train = image_iterator
+
+        # random points in latent space to turn to images via generator
+        # used for generator training
+        noise_input = tf.random.normal(shape=(batch_size, self.latent_dimensions))
+        misleading_labels = tf.zeros((batch_size, 1))
+
+        # Train the generator
+        # discriminator weights not updated
+        with tf.GradientTape() as tape:
+            predictions = self.discriminator(self.generator(noise_input))
+            g_loss = self.loss_fn(misleading_labels, predictions)
+        grads = tape.gradient(g_loss, self.generator.trainable_weights)
+        self.g_optimizer.apply_gradients(zip(grads, self.generator.trainable_weights))
+
+        # update metrics
+        self.d_loss_metric.update_state(d_loss)
+        self.g_loss_metric.update_state(g_loss)
+        return {
+            "d_loss": self.d_loss_metric.result(),
+            "g_loss": self.g_loss_metric.result(),
+        }
+
+class SaveImages(keras.callbacks.Callback):
+    def __init__(self, number_of_images=5, latent_dimensions=128, save_path=''):
+        self.number_of_images = number_of_images
+        self.latent_dimensions = latent_dimensions
+        self.save_path = save_path
+
+    def on_epoch_end(self, epoch, logs=None):
+        noise_input = tf.random.normal(shape=(self.number_of_images, self.latent_dimensions))
+        generated_images = self.model.generator(noise_input)
+        generated_images *= 255
+        generated_images.numpy()
+        for i in range(self.number_of_images):
+            img = keras.preprocessing.image.array_to_img(generated_images[i])
+            img.save(f"{self.save_path}gan-img-{epoch}-{i}.png")
+
+class SaveGANWeights(keras.callbacks.Callback):
+    def __init__(self, gan, save_path="artifacts"):
+        self.gan = gan
+        self.save_path=save_path
+
+    def on_epoch_end(self, epoch, logs=None):
+        self.gan.discriminator.save(f"{self.save_path}/discriminator")
+        self.gan.generator.save(f"{self.save_path}/generator")

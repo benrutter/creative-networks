@@ -131,3 +131,4 @@ dmypy.json
 # project specifics
 output_images/
 train_images/valid/
+artifacts/
