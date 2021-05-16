@@ -30,7 +30,7 @@ A second version of this network had more success- the network is based on the k
 
 Training of this network has been stable on an abstract art dataset without leading to divergence of the two networks. However, images *seem* to have stabilised around the point of the organic patterns shown below. It may be the case that continuing to train the network will ultimately lead to an improvement in the output, as the two networks have not yet reached a point of final convergence.
 
-However, within epochs/training batches, all produced images are of the same exact colour-palette, potentially an indication of mode collapse. It may now be the case that the *generator* has learned to produce organic patterns, and is now cycling through colour palettes to avoid the *discriminator* detecting the same
+However, within epochs/training batches, all produced images are of the same exact colour-palette, potentially an indication of mode collapse. It may now be the case that the *generator* has learned to produce organic patterns, and is now cycling through colour palettes to avoid the *discriminator* detecting repeating colors.
 
 ![v2 ArtGAN image 1](https://github.com/benrutter/creative-networks/blob/main/readme_images/artgan-v2-1.png)
 ![v2 ArtGAN image 2](https://github.com/benrutter/creative-networks/blob/main/readme_images/artgan-v2-2.png)
