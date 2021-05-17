@@ -130,8 +130,8 @@ dmypy.json
 
 # project specifics
 art_gan_v2/output_images/
-art_gan_v2/train_images/valid/
+art_gan_v2/train_images/
 art_gan_v2/artifacts/
 art_gan_v3/output_images/
-art_gan_v3/train_images/valid/
+art_gan_v3/train_images/
 art_gan_v3/artifacts/

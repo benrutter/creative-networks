@@ -12,7 +12,7 @@ class ArtGAN(keras.Model):
         self.dataset = keras.preprocessing.image_dataset_from_directory(
             image_directory,
             label_mode=None,
-            image_size=(64, 64),
+            image_size=(128, 128),
             batch_size=32
         )
         self.dataset = self.dataset.map(lambda x: x / 255.0)
@@ -24,16 +24,15 @@ class ArtGAN(keras.Model):
     def build_generator(self):
         generator = keras.Sequential([
             keras.Input(shape=(self.latent_dimensions,)),
-            layers.Dense(8 * 8 * 128),
-            layers.Reshape((8, 8, 128)),
-            layers.Conv2DTranspose(128, kernel_size=4, strides=2, padding="same"),
-            layers.LeakyReLU(alpha=0.2),
-            layers.Conv2DTranspose(128, kernel_size=4, strides=2, padding="same"),
-            layers.LeakyReLU(alpha=0.2),
-            layers.Conv2DTranspose(128, kernel_size=4, strides=2, padding="same"),
-            layers.LeakyReLU(alpha=0.2),
-            layers.Conv2DTranspose(512, kernel_size=4, strides=2, padding="same"),
-            layers.LeakyReLU(alpha=0.2),
+            layers.Dense(2*2*32),
+            layers.Reshape((2, 2, 32)),
+            layers.Conv2DTranspose(32, kernel_size=3, strides=(4, 4), padding="same", activation="relu"),
+            layers.BatchNormalization(momentum=0.8),
+            layers.Conv2DTranspose(64, kernel_size=3, strides=(8, 8), padding="same", activation="relu"),
+            layers.BatchNormalization(momentum=0.8),
+            layers.Conv2DTranspose(128, kernel_size=3, strides=(2, 2), padding="same", activation="relu"),
+            layers.BatchNormalization(momentum=0.8),
+            layers.Conv2DTranspose(512, kernel_size=5, strides=(1, 1), padding="same", activation="relu"),
             layers.Conv2D(3, kernel_size=5, padding="same", activation="sigmoid"),
         ], name="Generator")
         generator.summary()
@@ -41,13 +40,13 @@ class ArtGAN(keras.Model):
 
     def build_discriminator(self):
         discriminator = keras.Sequential([
-            keras.Input(shape=(64, 64, 3)),
-            layers.Conv2D(64, kernel_size=4, strides=2, padding="same"),
-            layers.LeakyReLU(alpha=0.2),
-            layers.Conv2D(128, kernel_size=4, strides=2, padding="same"),
-            layers.LeakyReLU(alpha=0.2),
-            layers.Conv2D(128, kernel_size=4, strides=2, padding="same"),
-            layers.LeakyReLU(alpha=0.2),
+            keras.Input(shape=(128, 128, 3)),
+            layers.Conv2D(64, kernel_size=5, strides=(2, 2), padding="same", activation="relu"),
+            layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2)),
+            layers.Conv2D(128, kernel_size=5, strides=(2, 2), padding="same", activation="relu"),
+            layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2)),
+            layers.Conv2D(512, kernel_size=3, strides=(2, 2), padding="same", activation="relu"),
+            layers.MaxPooling2D(pool_size=(2, 2), strides=(2, 2)),
             layers.Flatten(),
             layers.Dropout(0.2),
             layers.Dense(1, activation="sigmoid"),
@@ -113,7 +112,7 @@ class ArtGAN(keras.Model):
         }
 
 class SaveImages(keras.callbacks.Callback):
-    def __init__(self, number_of_images=5, latent_dimensions=128, save_path=''):
+    def __init__(self, number_of_images=5, latent_dimensions=128, save_path=""):
         self.number_of_images = number_of_images
         self.latent_dimensions = latent_dimensions
         self.save_path = save_path
