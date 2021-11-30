@@ -5,14 +5,14 @@ from art_gan import ArtGAN, SaveImages, SaveGANWeights
 
 art_gan = ArtGAN()
 try:
+    print('I: loading GAN')
     #art_gan.load()
-    pass
 except:
     print('W: Could not load GAN, training weights from new')
 
 art_gan.compile(
     d_optimizer=keras.optimizers.Adam(learning_rate=0.0001),
-    g_optimizer=keras.optimizers.Adam(learning_rate=0.0001),
+    g_optimizer=keras.optimizers.Adam(learning_rate=0.0002),
     loss_fn=keras.losses.BinaryCrossentropy(),
 )
 

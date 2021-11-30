@@ -24,15 +24,16 @@ class ArtGAN(keras.Model):
     def build_generator(self):
         generator = keras.Sequential([
             keras.Input(shape=(self.latent_dimensions,)),
-            layers.Dense(2*2*32),
-            layers.Reshape((2, 2, 32)),
-            layers.Conv2DTranspose(32, kernel_size=3, strides=(4, 4), padding="same", activation="relu"),
+            layers.Dense(8*8*32),
+            layers.Reshape((8, 8, 32)),
+            layers.Conv2DTranspose(32, kernel_size=3, strides=(2, 2), padding="same", activation="relu"),
             layers.BatchNormalization(momentum=0.8),
-            layers.Conv2DTranspose(64, kernel_size=3, strides=(8, 8), padding="same", activation="relu"),
+            layers.Conv2DTranspose(64, kernel_size=3, strides=(2, 2), padding="same", activation="relu"),
             layers.BatchNormalization(momentum=0.8),
             layers.Conv2DTranspose(128, kernel_size=3, strides=(2, 2), padding="same", activation="relu"),
             layers.BatchNormalization(momentum=0.8),
-            layers.Conv2DTranspose(512, kernel_size=5, strides=(1, 1), padding="same", activation="relu"),
+            layers.Conv2DTranspose(512, kernel_size=5, strides=(2, 2), padding="same", activation="relu"),
+            layers.Conv2DTranspose(128, kernel_size=5, strides=(1, 1), padding="same", activation="relu"),
             layers.Conv2D(3, kernel_size=5, padding="same", activation="sigmoid"),
         ], name="Generator")
         generator.summary()
